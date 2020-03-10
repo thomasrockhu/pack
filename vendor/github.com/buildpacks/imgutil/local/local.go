@@ -12,8 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/docker/docker/pkg/jsonmessage"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -21,6 +22,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/buildpacks/imgutil"
 )
@@ -31,9 +33,8 @@ type Image struct {
 	inspect          types.ImageInspect
 	layerPaths       []string
 	currentTempImage string
-	downloadOnce     *sync.Once
+	requestGroup     singleflight.Group
 	prevName         string
-	prevImage        *FileSystemLocalImage
 	easyAddLayers    []string
 }
 
@@ -75,17 +76,19 @@ func FromBaseImage(imageName string) ImageOption {
 }
 
 func NewImage(repoName string, dockerClient client.CommonAPIClient, ops ...ImageOption) (imgutil.Image, error) {
-	inspect := defaultInspect()
-
-	image := &Image{
-		docker:       dockerClient,
-		repoName:     repoName,
-		inspect:      inspect,
-		layerPaths:   make([]string, len(inspect.RootFS.Layers)),
-		downloadOnce: &sync.Once{},
+	var err error
+	inspect, err := defaultInspect(dockerClient)
+	if err != nil {
+		return nil, err
 	}
 
-	var err error
+	image := &Image{
+		docker:     dockerClient,
+		repoName:   repoName,
+		inspect:    inspect,
+		layerPaths: make([]string, len(inspect.RootFS.Layers)),
+	}
+
 	for _, v := range ops {
 		image, err = v(image)
 		if err != nil {
@@ -109,6 +112,14 @@ func (i *Image) Env(key string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+func (i *Image) OS() (string, error) {
+	return i.inspect.Os, nil
+}
+
+func (i *Image) Architecture() (string, error) {
+	return i.inspect.Architecture, nil
 }
 
 func (i *Image) Rename(name string) {
@@ -182,12 +193,13 @@ func (i *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
 	i.layerPaths = make([]string, len(i.inspect.RootFS.Layers))
 
 	// DOWNLOAD IMAGE
-	if err := i.downloadImageOnce(i.repoName); err != nil {
+	fsImage, err := i.downloadImageOnce(i.repoName)
+	if err != nil {
 		return err
 	}
 
 	// READ MANIFEST.JSON
-	b, err := ioutil.ReadFile(filepath.Join(i.prevImage.dir, "manifest.json"))
+	b, err := ioutil.ReadFile(filepath.Join(fsImage.dir, "manifest.json"))
 	if err != nil {
 		return err
 	}
@@ -201,7 +213,7 @@ func (i *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
 
 	// ADD EXISTING LAYERS
 	for _, filename := range manifest[0].Layers[(len(manifest[0].Layers) - keepLayers):] {
-		if err := i.AddLayer(filepath.Join(i.prevImage.dir, filename)); err != nil {
+		if err := i.AddLayer(filepath.Join(fsImage.dir, filename)); err != nil {
 			return err
 		}
 	}
@@ -250,16 +262,16 @@ func (i *Image) TopLayer() (string, error) {
 }
 
 func (i *Image) GetLayer(diffID string) (io.ReadCloser, error) {
-	err := i.downloadImageOnce(i.repoName)
+	fsImage, err := i.downloadImageOnce(i.repoName)
 	if err != nil {
 		return nil, err
 	}
 
-	layerID, ok := i.prevImage.layersMap[diffID]
+	layerID, ok := fsImage.layersMap[diffID]
 	if !ok {
 		return nil, fmt.Errorf("image '%s' does not contain layer with diff ID '%s'", i.repoName, diffID)
 	}
-	return os.Open(filepath.Join(i.prevImage.dir, layerID))
+	return os.Open(filepath.Join(fsImage.dir, layerID))
 }
 
 func (i *Image) AddLayer(path string) error {
@@ -295,17 +307,17 @@ func (i *Image) ReuseLayer(diffID string) error {
 		return errors.New("no previous image provided to reuse layers from")
 	}
 
-	err := i.downloadImageOnce(i.prevName)
+	fsImage, err := i.downloadImageOnce(i.prevName)
 	if err != nil {
 		return err
 	}
 
-	reuseLayer, ok := i.prevImage.layersMap[diffID]
+	reuseLayer, ok := fsImage.layersMap[diffID]
 	if !ok {
 		return fmt.Errorf("SHA %s was not found in %s", diffID, i.repoName)
 	}
 
-	return i.AddLayer(filepath.Join(i.prevImage.dir, reuseLayer))
+	return i.AddLayer(filepath.Join(fsImage.dir, reuseLayer))
 }
 
 func (i *Image) Save(additionalNames ...string) error {
@@ -351,8 +363,18 @@ func (i *Image) doSave() (types.ImageInspect, error) {
 			done <- err
 			return
 		}
-		if err := ensureReaderClosed(res.Body); err != nil {
-			done <- errors.Wrap(err, "failed to drain and close response from docker client")
+		defer res.Body.Close()
+
+		decoder := json.NewDecoder(res.Body)
+		var jsonMessage jsonmessage.JSONMessage
+		err = decoder.Decode(&jsonMessage)
+		if err != nil {
+			done <- errors.Wrapf(err, "parsing response")
+			return
+		}
+
+		if jsonMessage.Error != nil && !strings.HasPrefix(jsonMessage.Error.Message, "invalid tag") {
+			done <- errors.Wrap(jsonMessage.Error, "response error")
 			return
 		}
 
@@ -410,6 +432,11 @@ func (i *Image) doSave() (types.ImageInspect, error) {
 	tw.Close()
 	pw.Close()
 	err = <-done
+	if err != nil {
+		return types.ImageInspect{}, errors.Wrapf(err, "image load '%s'", i.repoName)
+	}
+
+	i.requestGroup.Forget(i.repoName)
 
 	inspect, _, err := i.docker.ImageInspectWithRaw(context.Background(), id)
 	if err != nil {
@@ -442,31 +469,33 @@ func (i *Image) Delete() error {
 	return err
 }
 
-func (i *Image) downloadImageOnce(imageName string) error {
-	var err error
-	i.downloadOnce.Do(func() {
-		var fsimg *FileSystemLocalImage
-		fsimg, err = downloadImage(i.docker, imageName)
-		i.prevImage = fsimg
+func (i *Image) downloadImageOnce(imageName string) (*FileSystemLocalImage, error) {
+	v, err, _ := i.requestGroup.Do(imageName, func() (details interface{}, err error) {
+		return downloadImage(i.docker, imageName)
 	})
-	return err
+
+	if err != nil {
+		return nil, err
+	}
+
+	return v.(*FileSystemLocalImage), nil
 }
 
 func downloadImage(docker client.CommonAPIClient, imageName string) (*FileSystemLocalImage, error) {
 	ctx := context.Background()
 
-	imageReader, err := docker.ImageSave(ctx, []string{imageName})
+	tarFile, err := docker.ImageSave(ctx, []string{imageName})
 	if err != nil {
 		return nil, err
 	}
-	defer ensureReaderClosed(imageReader)
+	defer tarFile.Close()
 
 	tmpDir, err := ioutil.TempDir("", "imgutil.local.image.")
 	if err != nil {
 		return nil, errors.Wrap(err, "local reuse-layer create temp dir")
 	}
 
-	err = untar(imageReader, tmpDir)
+	err = untar(tarFile, tmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +626,7 @@ func inspectOptionalImage(docker client.CommonAPIClient, imageName string) (type
 
 	if inspect, _, err = docker.ImageInspectWithRaw(context.Background(), imageName); err != nil {
 		if client.IsErrNotFound(err) {
-			return defaultInspect(), nil
+			return defaultInspect(docker)
 		}
 
 		return types.ImageInspect{}, errors.Wrapf(err, "verifying image '%s'", imageName)
@@ -606,12 +635,18 @@ func inspectOptionalImage(docker client.CommonAPIClient, imageName string) (type
 	return inspect, nil
 }
 
-func defaultInspect() types.ImageInspect {
+func defaultInspect(docker client.CommonAPIClient) (types.ImageInspect, error) {
+	daemonInfo, err := docker.Info(context.Background())
+	if err != nil {
+		return types.ImageInspect{}, err
+	}
+
 	return types.ImageInspect{
-		Os:           "linux",
+		Os:           daemonInfo.OSType,
+		OsVersion:    daemonInfo.OSVersion,
 		Architecture: "amd64",
 		Config:       &container.Config{},
-	}
+	}, nil
 }
 
 func v1Config(inspect types.ImageInspect) (v1.ConfigFile, error) {
@@ -684,13 +719,4 @@ func v1Config(inspect types.ImageInspect) (v1.ConfigFile, error) {
 		},
 		Config: config,
 	}, nil
-}
-
-// ensureReaderClosed drains and closes and reader, returning the first error
-func ensureReaderClosed(r io.ReadCloser) error {
-	_, err := io.Copy(ioutil.Discard, r)
-	if closeErr := r.Close(); closeErr != nil && err == nil {
-		err = closeErr
-	}
-	return err
 }
