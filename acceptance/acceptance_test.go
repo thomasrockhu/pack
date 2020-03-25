@@ -254,23 +254,20 @@ func testAcceptance(t *testing.T, when spec.G, it spec.S, packFixturesDir, packP
 				})
 			h.AssertNil(t, err)
 
-			// suiteManager.RegisterCleanUp("remove-stack-images", func() error {
-			// 	return h.DockerRmi(dockerCli, runImage, buildImage, value)
-			// })
+			suiteManager.RegisterCleanUp("remove-stack-images", func() error {
+				return h.DockerRmi(dockerCli, runImage, buildImage, value)
+			})
 
 			runImageMirror = value
 		})
 
-		when.Focus("creating a windows builder", func() {
-			windowsDaemon := true
+		when("creating a windows builder", func() {
+			it.Before(func() {
+				h.SkipIf(t, dockerHostOS() != "windows", "The current Docker daemon does not support Windows-based containers")
+			})
+
 			it("succeeds", func() {
-				img := createBuilder(t,
-					runImageMirror,
-					configDir,
-					packCreateBuilderPath,
-					lifecyclePath,
-					lifecycleDescriptor,
-					windowsDaemon)
+				img := createBuilder(t, runImageMirror, configDir, packCreateBuilderPath, lifecyclePath, lifecycleDescriptor)
 				h.DockerRmi(dockerCli, img)
 			})
 		})
@@ -281,9 +278,11 @@ func testAcceptance(t *testing.T, when spec.G, it spec.S, packFixturesDir, packP
 			)
 
 			it.Before(func() {
+				h.SkipIf(t, dockerHostOS() == "windows", "These tests are not yet compatible with Windows-based containers")
+
 				key := taskKey("create-builder", runImageMirror, configDir, packCreateBuilderPath, lifecyclePath)
 				value, err := suiteManager.RunTaskOnceString(key, func() (string, error) {
-					return createBuilder(t, runImageMirror, configDir, packCreateBuilderPath, lifecyclePath, lifecycleDescriptor, false), nil
+					return createBuilder(t, runImageMirror, configDir, packCreateBuilderPath, lifecyclePath, lifecycleDescriptor), nil
 				})
 				h.AssertNil(t, err)
 				suiteManager.RegisterCleanUp("clean-"+key, func() error {
@@ -1108,6 +1107,8 @@ func testAcceptance(t *testing.T, when spec.G, it spec.S, packFixturesDir, packP
 				"pack does not support 'package-buildpack'",
 			)
 
+			h.SkipIf(t, dockerHostOS() == "windows", "These tests are not yet compatible with Windows-based containers")
+
 			var err error
 			tmpDir, err = ioutil.TempDir("", "package-buildpack-tests")
 			h.AssertNil(t, err)
@@ -1521,7 +1522,7 @@ func buildPack(t *testing.T, compileVersion string) string {
 	return packPath
 }
 
-func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecyclePath string, lifecycleDescriptor builder.LifecycleDescriptor, windowsDaemon bool) string {
+func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecyclePath string, lifecycleDescriptor builder.LifecycleDescriptor) string {
 	t.Log("creating builder image...")
 
 	// CREATE TEMP WORKING DIR
@@ -1550,7 +1551,7 @@ func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecycleP
 
 	var packageImageName string
 	var packageId string
-	if !windowsDaemon {
+	if dockerHostOS() != "windows" {
 		// CREATE PACKAGE
 		packageImageName = packageBuildpack(t,
 			filepath.Join(configDir, "package.toml"),
@@ -1848,6 +1849,14 @@ func fillTemplate(t *testing.T, templatePath string, data map[string]interface{}
 	h.AssertNil(t, err)
 
 	return expectedOutput.String()
+}
+
+func dockerHostOS() string {
+	daemonInfo, err := dockerCli.Info(context.TODO())
+	if err != nil {
+		panic(err.Error())
+	}
+	return daemonInfo.OSType
 }
 
 // taskKey creates a key from the prefix and all arguments to be unique
