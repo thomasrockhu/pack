@@ -2,12 +2,13 @@ package layer_test
 
 import (
 	"archive/tar"
-	"github.com/buildpacks/pack/internal/layer"
-	h "github.com/buildpacks/pack/testhelpers"
 	"io"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/buildpacks/pack/internal/layer"
+	h "github.com/buildpacks/pack/testhelpers"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
