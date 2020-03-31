@@ -3,7 +3,6 @@ package pack
 import (
 	"context"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/url"
 	"os"
@@ -435,9 +434,12 @@ func (c *Client) processBuildpacks(ctx context.Context, builderImage imgutil.Ima
 				return fetchedBPs, order, errors.Wrapf(err, "downloading buildpack from %s", style.Symbol(bp))
 			}
 
-			fetchedBP, err := dist.BuildpackFromRootBlob(blob, func(w io.Writer) (archive.TarWriter, error) {
-				return layer.NewWriterForImage(builderImage, w)
-			})
+			tarWriterFactory, err := layer.NewTarWriterFactory(builderImage)
+			if err != nil {
+				return fetchedBPs, order, errors.Wrapf(err, "buildpack layer writer for image %s", style.Symbol(builderImage.Name()))
+			}
+
+			fetchedBP, err := dist.BuildpackFromRootBlob(blob, tarWriterFactory)
 			if err != nil {
 				return fetchedBPs, order, errors.Wrapf(err, "creating buildpack from %s", style.Symbol(bp))
 			}

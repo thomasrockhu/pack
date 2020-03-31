@@ -58,7 +58,7 @@ type Stack struct {
 // BuildpackFromRootBlob constructs a buildpack from a blob. It is assumed that the buildpack contents reside at the root of the
 // blob. The constructed buildpack contents will be structured as per the distribution spec (currently
 // a tar with contents under '/cnbs/buildpacks/{ID}/{version}/*').
-func BuildpackFromRootBlob(blob Blob, tarWriterFn func(io.Writer) (archive.TarWriter, error)) (Buildpack, error) {
+func BuildpackFromRootBlob(blob Blob, layerFactory archive.TarWriterFactory) (Buildpack, error) {
 	bpd := BuildpackDescriptor{}
 	rc, err := blob.Open()
 	if err != nil {
@@ -88,7 +88,7 @@ func BuildpackFromRootBlob(blob Blob, tarWriterFn func(io.Writer) (archive.TarWr
 				func(tw archive.TarWriter) error {
 					return toDistTar(tw, bpd, blob)
 				},
-				tarWriterFn,
+				layerFactory.NewTarWriter,
 			)
 		},
 	}

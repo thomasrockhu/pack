@@ -41,6 +41,13 @@ func (w *WindowsWriter) WriteHeader(header *tar.Header) error {
 	return w.tarWriter.WriteHeader(header)
 }
 
+func (w *WindowsWriter) Close() error {
+	if err := w.initializeLayer(); err != nil {
+		return err
+	}
+	return w.tarWriter.Close()
+}
+
 func (w *WindowsWriter) writeParentPaths(childPath string) error {
 	parentDir := ""
 	for _, pathPart := range strings.Split(path.Dir(childPath), "/") {
@@ -54,13 +61,6 @@ func (w *WindowsWriter) writeParentPaths(childPath string) error {
 		}
 	}
 	return nil
-}
-
-func (w *WindowsWriter) Close() error {
-	if err := w.initializeLayer(); err != nil {
-		return err
-	}
-	return w.tarWriter.Close()
 }
 
 func layerFilesPath(origPath string) string {
