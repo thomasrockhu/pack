@@ -14,6 +14,7 @@ type PhaseConfigProvider struct {
 	name     string
 }
 
+// This function would need to be extended to accept an arbitrary image as an argument.
 func NewPhaseConfigProvider(name string, lifecycle *Lifecycle, ops ...PhaseConfigProviderOperation) *PhaseConfigProvider {
 	provider := &PhaseConfigProvider{
 		ctrConf:  new(container.Config),
@@ -22,7 +23,7 @@ func NewPhaseConfigProvider(name string, lifecycle *Lifecycle, ops ...PhaseConfi
 	}
 
 	provider.ctrConf.Cmd = []string{"/cnb/lifecycle/" + name}
-	provider.ctrConf.Image = lifecycle.builder.Name()
+	provider.ctrConf.Image = lifecycle.builder.Name() // this would become the passed in image.
 	provider.ctrConf.Labels = map[string]string{"author": "pack"}
 
 	ops = append(ops,

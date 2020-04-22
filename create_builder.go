@@ -140,11 +140,11 @@ func (c *Client) fetchLifecycle(ctx context.Context, config pubbldr.LifecycleCon
 			return nil, errors.Wrapf(err, "%s must be a valid semver", style.Symbol("lifecycle.version"))
 		}
 
-		uri = uriFromLifecycleVersion(*v)
+		uri = UriFromLifecycleVersion(*v)
 	case config.URI != "":
 		uri = config.URI
 	default:
-		uri = uriFromLifecycleVersion(*semver.MustParse(builder.DefaultLifecycleVersion))
+		uri = UriFromLifecycleVersion(*semver.MustParse(builder.DefaultLifecycleVersion))
 	}
 
 	b, err := c.downloader.Download(ctx, uri)
@@ -160,7 +160,7 @@ func (c *Client) fetchLifecycle(ctx context.Context, config pubbldr.LifecycleCon
 	return lifecycle, nil
 }
 
-func uriFromLifecycleVersion(version semver.Version) string {
+func UriFromLifecycleVersion(version semver.Version) string {
 	return fmt.Sprintf("https://github.com/buildpacks/lifecycle/releases/download/v%s/lifecycle-v%s+linux.x86-64.tgz", version.String(), version.String())
 }
 

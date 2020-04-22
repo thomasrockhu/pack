@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"github.com/buildpacks/imgutil"
 	"math/rand"
 	"sync"
 	"time"
@@ -65,6 +66,7 @@ type LifecycleOptions struct {
 	AppPath            string
 	Image              name.Reference
 	Builder            Builder
+	LifecycleImage     imgutil.Image // TODO: should this be name.Reference?
 	RunImage           string
 	ClearCache         bool
 	Publish            bool

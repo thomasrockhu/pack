@@ -578,10 +578,10 @@ func (b *Builder) stackLayer(dest string) (string, error) {
 	return layerTar, nil
 }
 
-func (b *Builder) embedLifecycleTar(tw *tar.Writer) error {
+func embedLifecycleTar(lifecycle Lifecycle, tw *tar.Writer) error {
 	var regex = regexp.MustCompile(`^[^/]+/([^/]+)$`)
 
-	lr, err := b.lifecycle.Open()
+	lr, err := lifecycle.Open()
 	if err != nil {
 		return errors.Wrap(err, "failed to open lifecycle")
 	}
@@ -648,7 +648,7 @@ func (b *Builder) envLayer(dest string, env map[string]string) (string, error) {
 	return fh.Name(), nil
 }
 
-func (b *Builder) lifecycleLayer(dest string) (string, error) {
+func WriteLifecycleLayerTar(lifecycle Lifecycle, dest string) (string, error) {
 	fh, err := os.Create(filepath.Join(dest, "lifecycle.tar"))
 	if err != nil {
 		return "", err
@@ -667,7 +667,7 @@ func (b *Builder) lifecycleLayer(dest string) (string, error) {
 		return "", err
 	}
 
-	err = b.embedLifecycleTar(tw)
+	err = embedLifecycleTar(lifecycle, tw)
 	if err != nil {
 		return "", errors.Wrap(err, "embedding lifecycle tar")
 	}
@@ -683,4 +683,8 @@ func (b *Builder) lifecycleLayer(dest string) (string, error) {
 	}
 
 	return fh.Name(), nil
+}
+
+func (b *Builder) lifecycleLayer(dest string) (string, error) {
+	return WriteLifecycleLayerTar(b.lifecycle, dest)
 }

@@ -3,6 +3,8 @@ package pack
 import (
 	"context"
 	"fmt"
+	"github.com/Masterminds/semver"
+	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"os"
@@ -118,6 +120,13 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 	}
 	defer c.docker.ImageRemove(context.Background(), ephemeralBuilder.Name(), types.ImageRemoveOptions{Force: true})
 
+	lifecycleImage, err := c.createLifecycleImage(ctx, ephemeralBuilder) // TODO: only if the builder is untrusted
+	if err != nil {
+		return errors.Wrap(err, "creating lifecycle image")
+	}
+	fmt.Println("lifecycle image: ", lifecycleImage.Name()) // TODO: remove
+	defer c.docker.ImageRemove(context.Background(), lifecycleImage.Name(), types.ImageRemoveOptions{Force: true})
+
 	lcPlatformAPIVersion := ephemeralBuilder.LifecycleDescriptor().API.PlatformVersion
 	supportsPlatform := false
 	for _, v := range build.SupportedPlatformAPIVersions {
@@ -141,6 +150,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		AppPath:            appPath,
 		Image:              imageRef,
 		Builder:            ephemeralBuilder,
+		LifecycleImage: lifecycleImage,
 		RunImage:           runImageName,
 		ClearCache:         opts.ClearCache,
 		Publish:            opts.Publish,
@@ -542,6 +552,48 @@ func (c *Client) createEphemeralBuilder(rawBuilderImage imgutil.Image, env map[s
 		return nil, err
 	}
 	return bldr, nil
+}
+
+func (c *Client) createLifecycleImage(ctx context.Context, bldr *builder.Builder) (imgutil.Image, error) {
+	lcVersion := bldr.LifecycleDescriptor().Info.Version
+	v, err := semver.NewVersion(lcVersion.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "parsing lifecycle version: %s", lcVersion.String())
+	}
+
+	lcUri := UriFromLifecycleVersion(*v)
+	lcBlob, err := c.downloader.Download(ctx, lcUri)
+	if err != nil {
+		return nil, errors.Wrap(err, "downloading lifecycle")
+	}
+
+	lifecycle, err := builder.NewLifecycle(lcBlob)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing lifecycle")
+	}
+
+	tmpDir, err := ioutil.TempDir("", "build-create-lifecycle-image")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	lifecycleLayerTar, err := builder.WriteLifecycleLayerTar(lifecycle, tmpDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "writing lifecycle layer tar")
+	}
+
+	randomName := fmt.Sprintf("pack.local/builder/%x:latest", randString(10)) // TODO: should this always include local?
+	lifecycleImage, err := c.imageFactory.NewImage(randomName, true) // TODO: when should local be false?
+	if err := lifecycleImage.AddLayer(lifecycleLayerTar); err != nil {
+		return nil, errors.Wrap(err, "adding lifecycle layer")
+	}
+	if err := lifecycleImage.Save(); err != nil {
+		return nil, errors. Wrap(err, "saving lifecycle image")
+	} // TODO: this image is "runnable" in the sense that the lifecycle binaries can be invoked -
+	// but unclear if their dependencies (e.g., `/group.toml` for `analyze`) will all be provided in phases.go  or if those are expected to be found on the builder.
+
+	return lifecycleImage, nil
 }
 
 func randString(n int) string {
