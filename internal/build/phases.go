@@ -60,6 +60,8 @@ func (l *Lifecycle) Restore(ctx context.Context, cacheName string, phaseFactory 
 			)...,
 		),
 		WithBinds(fmt.Sprintf("%s:%s", cacheName, cacheDir)),
+		//WithImage(l.lifecycleImage.Name()), // TODO: why does restore need this if no --publish ?
+		// TODO: why does running this in the lifecycle image cause the Build phase to fail?
 	)
 
 	restore := phaseFactory.New(configProvider)
@@ -100,6 +102,7 @@ func (l *Lifecycle) newAnalyze(repoName, cacheName string, publish, clearCache b
 			WithRoot(),
 			WithArgs(args...),
 			WithBinds(fmt.Sprintf("%s:%s", cacheName, cacheDir)),
+			WithImage(l.lifecycleImage.Name()),
 		)
 
 		return phaseFactory.New(configProvider), nil
@@ -180,6 +183,7 @@ func (l *Lifecycle) newExport(repoName, runImage string, publish bool, launchCac
 			),
 			WithRoot(),
 			WithBinds(binds...),
+			WithImage(l.lifecycleImage.Name()),
 		)
 
 		return phaseFactory.New(configProvider), nil

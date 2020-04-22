@@ -38,7 +38,7 @@ const (
 	lifecycleDir       = "/cnb/lifecycle"
 	compatLifecycleDir = "/lifecycle"
 	workspaceDir       = "/workspace"
-	layersDir          = "/layers"
+	LayersDir          = "/layers"
 
 	metadataLabel = "io.buildpacks.builder.metadata"
 	stackLabel    = "io.buildpacks.stack.id"
@@ -324,7 +324,7 @@ func (b *Builder) Save(logger logging.Logger) error {
 		}
 	}
 
-	stackTar, err := b.stackLayer(tmpDir)
+	stackTar, err := StackLayer(tmpDir, b.metadata.Stack)
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func (b *Builder) Save(logger logging.Logger) error {
 		return err
 	}
 
-	if err := b.image.SetWorkingDir(layersDir); err != nil {
+	if err := b.image.SetWorkingDir(LayersDir); err != nil {
 		return errors.Wrap(err, "failed to set working dir")
 	}
 
@@ -478,6 +478,25 @@ func userAndGroupIDs(img imgutil.Image) (int, int, error) {
 	return uid, gid, nil
 }
 
+func ScratchDefaultDirsLayer(dest string, uid, gid int) (string, error) {
+	fh, err := os.Create(filepath.Join(dest, "scratch_dirs.tar"))
+	if err != nil {
+		return "", err
+	}
+	defer fh.Close()
+
+	tw := tar.NewWriter(fh)
+	defer tw.Close()
+
+	ts := archive.NormalizedDateTime
+
+	if err := tw.WriteHeader(rootOwnedDir("/tmp", ts)); err != nil { // TODO: make constant
+		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol("/tmp"))
+	}
+
+	return fh.Name(), nil
+}
+
 func (b *Builder) defaultDirsLayer(dest string) (string, error) {
 	fh, err := os.Create(filepath.Join(dest, "dirs.tar"))
 	if err != nil {
@@ -494,23 +513,23 @@ func (b *Builder) defaultDirsLayer(dest string) (string, error) {
 		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(workspaceDir))
 	}
 
-	if err := tw.WriteHeader(b.packOwnedDir(layersDir, ts)); err != nil {
-		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(layersDir))
+	if err := tw.WriteHeader(b.packOwnedDir(LayersDir, ts)); err != nil {
+		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(LayersDir))
 	}
 
-	if err := tw.WriteHeader(b.rootOwnedDir(cnbDir, ts)); err != nil {
+	if err := tw.WriteHeader(rootOwnedDir(cnbDir, ts)); err != nil {
 		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(cnbDir))
 	}
 
-	if err := tw.WriteHeader(b.rootOwnedDir(dist.BuildpacksDir, ts)); err != nil {
+	if err := tw.WriteHeader(rootOwnedDir(dist.BuildpacksDir, ts)); err != nil {
 		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(dist.BuildpacksDir))
 	}
 
-	if err := tw.WriteHeader(b.rootOwnedDir(platformDir, ts)); err != nil {
+	if err := tw.WriteHeader(rootOwnedDir(platformDir, ts)); err != nil {
 		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(platformDir))
 	}
 
-	if err := tw.WriteHeader(b.rootOwnedDir(platformDir+"/env", ts)); err != nil {
+	if err := tw.WriteHeader(rootOwnedDir(platformDir+"/env", ts)); err != nil {
 		return "", errors.Wrapf(err, "creating %s dir in layer", style.Symbol(platformDir+"/env"))
 	}
 
@@ -528,7 +547,7 @@ func (b *Builder) packOwnedDir(path string, time time.Time) *tar.Header {
 	}
 }
 
-func (b *Builder) rootOwnedDir(path string, time time.Time) *tar.Header {
+func rootOwnedDir(path string, time time.Time) *tar.Header {
 	return &tar.Header{
 		Typeflag: tar.TypeDir,
 		Name:     path,
@@ -562,9 +581,9 @@ func orderFileContents(order dist.Order) (string, error) {
 	return buf.String(), nil
 }
 
-func (b *Builder) stackLayer(dest string) (string, error) {
+func StackLayer(dest string, stackMetadata interface{}) (string, error) {
 	buf := &bytes.Buffer{}
-	err := toml.NewEncoder(buf).Encode(b.metadata.Stack)
+	err := toml.NewEncoder(buf).Encode(stackMetadata)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to marshal stack.toml")
 	}

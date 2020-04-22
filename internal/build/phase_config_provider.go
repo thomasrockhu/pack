@@ -67,8 +67,14 @@ func WithBinds(binds ...string) PhaseConfigProviderOperation {
 
 func WithDaemonAccess() PhaseConfigProviderOperation {
 	return func(provider *PhaseConfigProvider) {
-		provider.ctrConf.User = "root"
+		provider.ctrConf.User = "0" // Scratch image does not have "root" user.
 		provider.hostConf.Binds = append(provider.hostConf.Binds, "/var/run/docker.sock:/var/run/docker.sock")
+	}
+}
+
+func WithImage(name string) PhaseConfigProviderOperation {
+	return func(provider *PhaseConfigProvider) {
+		provider.ctrConf.Image = name
 	}
 }
 
@@ -106,6 +112,6 @@ func WithRegistryAccess(authConfig string) PhaseConfigProviderOperation {
 
 func WithRoot() PhaseConfigProviderOperation {
 	return func(provider *PhaseConfigProvider) {
-		provider.ctrConf.User = "root"
+		provider.ctrConf.User = "0" // Scratch image does not have "root" user.
 	}
 }

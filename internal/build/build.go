@@ -31,6 +31,7 @@ type Builder interface {
 
 type Lifecycle struct {
 	builder            Builder
+	lifecycleImage     imgutil.Image
 	logger             logging.Logger
 	docker             client.CommonAPIClient
 	appPath            string
@@ -133,6 +134,7 @@ func (l *Lifecycle) Setup(opts LifecycleOptions) {
 	l.appPath = opts.AppPath
 	l.appOnce = &sync.Once{}
 	l.builder = opts.Builder
+	l.lifecycleImage = opts.LifecycleImage
 	l.httpProxy = opts.HTTPProxy
 	l.httpsProxy = opts.HTTPSProxy
 	l.noProxy = opts.NoProxy

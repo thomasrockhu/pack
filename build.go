@@ -150,7 +150,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		AppPath:            appPath,
 		Image:              imageRef,
 		Builder:            ephemeralBuilder,
-		LifecycleImage: lifecycleImage,
+		LifecycleImage:     lifecycleImage,
 		RunImage:           runImageName,
 		ClearCache:         opts.ClearCache,
 		Publish:            opts.Publish,
@@ -555,6 +555,8 @@ func (c *Client) createEphemeralBuilder(rawBuilderImage imgutil.Image, env map[s
 }
 
 func (c *Client) createLifecycleImage(ctx context.Context, bldr *builder.Builder) (imgutil.Image, error) {
+	// Get lifecycle
+
 	lcVersion := bldr.LifecycleDescriptor().Info.Version
 	v, err := semver.NewVersion(lcVersion.String())
 	if err != nil {
@@ -572,26 +574,57 @@ func (c *Client) createLifecycleImage(ctx context.Context, bldr *builder.Builder
 		return nil, errors.Wrap(err, "initializing lifecycle")
 	}
 
+	// Setup temp directory
+
 	tmpDir, err := ioutil.TempDir("", "build-create-lifecycle-image")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(tmpDir)
 
+	// Setup image
+
+	randomName := fmt.Sprintf("pack.local/builder/%x:latest", randString(10)) // TODO: should this always include local?
+	lifecycleImage, err := c.imageFactory.NewImage(randomName, true/*, local.FromBaseImage("scratch")*/) // TODO: when should local be false?
+
+	// Write layers
+
 	lifecycleLayerTar, err := builder.WriteLifecycleLayerTar(lifecycle, tmpDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "writing lifecycle layer tar")
 	}
-
-	randomName := fmt.Sprintf("pack.local/builder/%x:latest", randString(10)) // TODO: should this always include local?
-	lifecycleImage, err := c.imageFactory.NewImage(randomName, true) // TODO: when should local be false?
 	if err := lifecycleImage.AddLayer(lifecycleLayerTar); err != nil {
 		return nil, errors.Wrap(err, "adding lifecycle layer")
 	}
+
+	// export needs this
+	stackLayerTar, err := builder.StackLayer(tmpDir, bldr.Stack())
+	if err != nil {
+		return nil, errors.Wrap(err, "writing stack layer tar")
+	}
+	if err := lifecycleImage.AddLayer(stackLayerTar); err != nil {
+		return nil, errors.Wrap(err, "adding stack layer")
+	}
+
+	// export needs this
+	scratchDefaultDirsTar, err := builder.ScratchDefaultDirsLayer(tmpDir, bldr.UID(), bldr.GID())
+	if err != nil {
+		return nil, errors.Wrap(err, "writing scratch default dirs tar")
+	}
+	if err := lifecycleImage.AddLayer(scratchDefaultDirsTar); err != nil {
+		return nil, errors.Wrap(err, "adding scratch default dirs layer")
+	}
+
+	// analyze needs this (maybe also export)
+	if err := lifecycleImage.SetWorkingDir(builder.LayersDir); err != nil {
+		return nil, errors.Wrap(err, "setting working directory")
+	}
+
+	// Save
+
 	if err := lifecycleImage.Save(); err != nil {
 		return nil, errors. Wrap(err, "saving lifecycle image")
-	} // TODO: this image is "runnable" in the sense that the lifecycle binaries can be invoked -
-	// but unclear if their dependencies (e.g., `/group.toml` for `analyze`) will all be provided in phases.go  or if those are expected to be found on the builder.
+	}
 
 	return lifecycleImage, nil
 }
