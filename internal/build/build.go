@@ -67,7 +67,7 @@ type LifecycleOptions struct {
 	AppPath            string
 	Image              name.Reference
 	Builder            Builder
-	LifecycleImage     imgutil.Image // TODO: should this be name.Reference?
+	LifecycleImage     imgutil.Image // TODO: do we need to pass the image, or just the name?
 	RunImage           string
 	ClearCache         bool
 	Publish            bool

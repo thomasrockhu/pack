@@ -95,7 +95,7 @@ func (l *Lifecycle) newAnalyze(repoName, cacheName string, publish, clearCache b
 			return nil, err
 		}
 
-		configProvider := NewPhaseConfigProvider( // we could pass in the lifecycle image here.
+		configProvider := NewPhaseConfigProvider(
 			"analyzer",
 			l,
 			WithRegistryAccess(authConfig),
