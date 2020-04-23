@@ -2,6 +2,8 @@ package fakes
 
 import (
 	"github.com/Masterminds/semver"
+	"github.com/buildpacks/imgutil"
+	ifakes "github.com/buildpacks/imgutil/fakes"
 
 	"github.com/buildpacks/pack/internal/api"
 	"github.com/buildpacks/pack/internal/build"
@@ -9,7 +11,7 @@ import (
 )
 
 type FakeBuilder struct {
-	ReturnForName                string
+	ReturnForImage               *ifakes.Image
 	ReturnForUID                 int
 	ReturnForGID                 int
 	ReturnForLifecycleDescriptor builder.LifecycleDescriptor
@@ -33,7 +35,7 @@ func NewFakeBuilder(ops ...func(*FakeBuilder)) (*FakeBuilder, error) {
 	}
 
 	fakeBuilder := &FakeBuilder{
-		ReturnForName: "some-builder-name",
+		ReturnForImage: ifakes.NewImage("some-builder-name", "", nil),
 		ReturnForUID:  99,
 		ReturnForGID:  99,
 		ReturnForLifecycleDescriptor: builder.LifecycleDescriptor{
@@ -55,9 +57,9 @@ func NewFakeBuilder(ops ...func(*FakeBuilder)) (*FakeBuilder, error) {
 	return fakeBuilder, nil
 }
 
-func WithName(name string) func(*FakeBuilder) {
+func WithImage(image *ifakes.Image) func(*FakeBuilder) {
 	return func(builder *FakeBuilder) {
-		builder.ReturnForName = name
+		builder.ReturnForImage = image
 	}
 }
 
@@ -80,7 +82,11 @@ func WithGID(gid int) func(*FakeBuilder) {
 }
 
 func (b *FakeBuilder) Name() string {
-	return b.ReturnForName
+	return b.ReturnForImage.Name()
+}
+
+func (b *FakeBuilder) Image() imgutil.Image {
+	return b.ReturnForImage
 }
 
 func (b *FakeBuilder) UID() int {

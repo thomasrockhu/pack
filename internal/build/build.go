@@ -142,8 +142,7 @@ func (l *Lifecycle) Execute(ctx context.Context, opts LifecycleOptions) error {
 
 	launchCache := cache.NewVolumeCache(opts.Image, "launch", l.docker)
 
-	l.logger.Info(style.Step("PREPARING"))
-	if err := l.prepareAppVolume(ctx); err != nil {
+	if err := l.PrepareAppVolume(ctx); err != nil {
 		return err
 	}
 

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	ifakes "github.com/buildpacks/imgutil/fakes"
+
 	"github.com/buildpacks/pack/internal/build/fakes"
 
 	"github.com/docker/docker/api/types/container"
@@ -30,8 +32,8 @@ func TestPhaseConfigProvider(t *testing.T) {
 func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 	when("#NewPhaseConfigProvider", func() {
 		it("returns a phase config provider with defaults", func() {
-			expectedBuilderName := "some-builder-name"
-			fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithName(expectedBuilderName))
+			expectedBuilderImage := ifakes.NewImage("some-builder-name", "", nil)
+			fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithImage(expectedBuilderImage))
 			h.AssertNil(t, err)
 			lifecycle := newTestLifecycle(t, false, fakes.WithBuilder(fakeBuilder))
 			expectedPhaseName := "some-name"
@@ -41,7 +43,7 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 
 			h.AssertEq(t, phaseConfigProvider.Name(), expectedPhaseName)
 			h.AssertEq(t, phaseConfigProvider.ContainerConfig().Cmd, expectedCmd)
-			h.AssertEq(t, phaseConfigProvider.ContainerConfig().Image, expectedBuilderName)
+			h.AssertEq(t, phaseConfigProvider.ContainerConfig().Image, expectedBuilderImage.Name())
 			h.AssertEq(t, phaseConfigProvider.ContainerConfig().Labels, map[string]string{"author": "pack"})
 
 			// CreateFakeLifecycle sets the following:
@@ -87,17 +89,38 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 		})
 
 		when("called with WithDaemonAccess", func() {
-			it("sets daemon access on the config", func() {
-				lifecycle := newTestLifecycle(t, false)
+			when("building for non-Windows", func() {
+				it("sets daemon access on the config", func() {
+					lifecycle := newTestLifecycle(t, false)
 
-				phaseConfigProvider := build.NewPhaseConfigProvider(
-					"some-name",
-					lifecycle,
-					build.WithDaemonAccess(),
-				)
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithDaemonAccess(),
+					)
 
-				h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "root")
-				h.AssertSliceContains(t, phaseConfigProvider.HostConfig().Binds, "/var/run/docker.sock:/var/run/docker.sock")
+					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "root")
+					h.AssertSliceContains(t, phaseConfigProvider.HostConfig().Binds, "/var/run/docker.sock:/var/run/docker.sock")
+				})
+			})
+
+			when("building for Windows", func() {
+				it("sets daemon access on the config", func() {
+					fakeBuilderImage := ifakes.NewImage("fake-builder", "", nil)
+					fakeBuilderImage.SetPlatform("windows", "", "")
+					fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithImage(fakeBuilderImage))
+					h.AssertNil(t, err)
+					lifecycle := newTestLifecycle(t, false, fakes.WithBuilder(fakeBuilder))
+
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithDaemonAccess(),
+					)
+
+					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "")
+					h.AssertSliceContains(t, phaseConfigProvider.HostConfig().Binds, `\\.\pipe\docker_engine:\\.\pipe\docker_engine`)
+				})
 			})
 		})
 
@@ -165,35 +188,83 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 		})
 
 		when("called with WithRegistryAccess", func() {
-			it("sets registry access on the config", func() {
-				lifecycle := newTestLifecycle(t, false)
-				authConfig := "some-auth-config"
+			when("building for non-Windows", func() {
+				it("sets registry access on the config", func() {
+					lifecycle := newTestLifecycle(t, false)
+					authConfig := "some-auth-config"
 
-				phaseConfigProvider := build.NewPhaseConfigProvider(
-					"some-name",
-					lifecycle,
-					build.WithRegistryAccess(authConfig),
-				)
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithRegistryAccess(authConfig),
+					)
 
-				h.AssertSliceContains(
-					t,
-					phaseConfigProvider.ContainerConfig().Env,
-					"CNB_REGISTRY_AUTH="+authConfig,
-				)
+					h.AssertSliceContains(
+						t,
+						phaseConfigProvider.ContainerConfig().Env,
+						"CNB_REGISTRY_AUTH="+authConfig,
+					)
+					h.AssertEq(t, phaseConfigProvider.HostConfig().NetworkMode, container.NetworkMode("host"))
+				})
 			})
+
+			when("building for Windows", func() {
+				it("sets registry access on the config", func() {
+					fakeBuilderImage := ifakes.NewImage("fake-builder", "", nil)
+					fakeBuilderImage.SetPlatform("windows", "", "")
+					fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithImage(fakeBuilderImage))
+					h.AssertNil(t, err)
+					lifecycle := newTestLifecycle(t, false, fakes.WithBuilder(fakeBuilder))
+					authConfig := "some-auth-config"
+
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithRegistryAccess(authConfig),
+					)
+
+					h.AssertSliceContains(
+						t,
+						phaseConfigProvider.ContainerConfig().Env,
+						"CNB_REGISTRY_AUTH="+authConfig,
+					)
+					h.AssertEq(t, phaseConfigProvider.HostConfig().NetworkMode, container.NetworkMode(""))
+				})
+			})
+
 		})
 
 		when("called with WithRoot", func() {
-			it("sets root user on the config", func() {
-				lifecycle := newTestLifecycle(t, false)
+			when("building for non-Windows", func() {
+				it("sets root user on the config", func() {
+					lifecycle := newTestLifecycle(t, false)
 
-				phaseConfigProvider := build.NewPhaseConfigProvider(
-					"some-name",
-					lifecycle,
-					build.WithRoot(),
-				)
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithRoot(),
+					)
 
-				h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "root")
+					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "root")
+				})
+			})
+
+			when("building for Windows", func() {
+				it("sets root user on the config", func() {
+					fakeBuilderImage := ifakes.NewImage("fake-builder", "", nil)
+					fakeBuilderImage.SetPlatform("windows", "", "")
+					fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithImage(fakeBuilderImage))
+					h.AssertNil(t, err)
+					lifecycle := newTestLifecycle(t, false, fakes.WithBuilder(fakeBuilder))
+
+					phaseConfigProvider := build.NewPhaseConfigProvider(
+						"some-name",
+						lifecycle,
+						build.WithRoot(),
+					)
+
+					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "ContainerAdministrator")
+				})
 			})
 		})
 	})
