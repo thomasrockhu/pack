@@ -231,7 +231,6 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 					h.AssertEq(t, phaseConfigProvider.HostConfig().NetworkMode, container.NetworkMode(""))
 				})
 			})
-
 		})
 
 		when("called with WithRoot", func() {

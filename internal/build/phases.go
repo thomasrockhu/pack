@@ -4,26 +4,24 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"io"
-	"os"
 	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/semver"
 	"github.com/buildpacks/lifecycle/auth"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types"
 	dcontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/pkg/errors"
 
-	"github.com/buildpacks/pack/internal/builder"
-	"github.com/buildpacks/pack/internal/api"
 	"github.com/buildpacks/pack/internal/archive"
+	"github.com/buildpacks/pack/internal/builder"
 	"github.com/buildpacks/pack/internal/container"
 	"github.com/buildpacks/pack/internal/style"
 	"github.com/buildpacks/pack/logging"
@@ -119,13 +117,13 @@ func (l *Lifecycle) Create(ctx context.Context, publish, clearCache bool, runIma
 		repoName,
 	}
 
-	binds := []string{fmt.Sprintf("%s:%s", cacheName, cacheDir)}
+	binds := []string{fmt.Sprintf("%s:%s", cacheName, l.mountPaths.cacheDir())}
 
 	if clearCache {
 		args = append([]string{"-skip-restore"}, args...)
 	}
 
-	args = append([]string{"-cache-dir", cacheDir}, args...)
+	args = append([]string{"-cache-dir", l.mountPaths.cacheDir()}, args...)
 
 	if l.DefaultProcessType != "" {
 		if l.supportsDefaultProcess() {
@@ -136,8 +134,8 @@ func (l *Lifecycle) Create(ctx context.Context, publish, clearCache bool, runIma
 	}
 
 	if !publish {
-		args = append([]string{"-daemon", "-launch-cache", launchCacheDir}, args...)
-		binds = append([]string{fmt.Sprintf("%s:%s", launchCacheName, launchCacheDir)}, binds...)
+		args = append([]string{"-daemon", "-launch-cache", l.mountPaths.launchCacheDir()}, args...)
+		binds = append([]string{fmt.Sprintf("%s:%s", launchCacheName, l.mountPaths.launchCacheDir())}, binds...)
 	}
 
 	if publish {

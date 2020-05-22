@@ -186,7 +186,7 @@ func testPhase(t *testing.T, when spec.G, it spec.S) {
 						tmpFakeAppDir, err = ioutil.TempDir("", "fake-app")
 						h.AssertNil(t, err)
 						dirWithoutAccess = filepath.Join(tmpFakeAppDir, "bad-dir")
-						err := os.MkdirAll(dirWithoutAccess, 0777)//0222)
+						err := os.MkdirAll(dirWithoutAccess, 0777) //0222)
 						h.AssertNil(t, err)
 					})
 

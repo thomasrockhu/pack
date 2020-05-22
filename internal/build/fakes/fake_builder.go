@@ -36,8 +36,8 @@ func NewFakeBuilder(ops ...func(*FakeBuilder)) (*FakeBuilder, error) {
 
 	fakeBuilder := &FakeBuilder{
 		ReturnForImage: ifakes.NewImage("some-builder-name", "", nil),
-		ReturnForUID:  99,
-		ReturnForGID:  99,
+		ReturnForUID:   99,
+		ReturnForGID:   99,
 		ReturnForLifecycleDescriptor: builder.LifecycleDescriptor{
 			API: builder.LifecycleAPI{
 				BuildpackVersion: buildpackVersion,
