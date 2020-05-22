@@ -71,7 +71,6 @@ func RunRegistry(t *testing.T) *TestRegistryConfig {
 		if err == nil {
 			break
 		}
-		t.Logf("error getting catalog: %s", err.Error())
 
 		err = ctx.Err()
 		if err != nil {
