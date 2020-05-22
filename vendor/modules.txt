@@ -27,8 +27,6 @@ github.com/buildpacks/lifecycle/cmd
 github.com/buildpacks/lifecycle/launch
 # github.com/containerd/containerd v1.3.3
 github.com/containerd/containerd/errdefs
-# github.com/dgodd/dockerdial v1.0.1
-github.com/dgodd/dockerdial
 # github.com/docker/cli v0.0.0-20200312141509-ef2f64abbd37
 github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
@@ -123,8 +121,6 @@ github.com/google/go-containerregistry/pkg/v1/v1util
 github.com/google/go-github/v30/github
 # github.com/google/go-querystring v1.0.0
 github.com/google/go-querystring/query
-# github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d
-github.com/hashicorp/yamux
 # github.com/heroku/color v0.0.6
 github.com/heroku/color
 # github.com/inconshreveable/mousetrap v1.0.0

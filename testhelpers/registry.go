@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -27,6 +28,20 @@ type TestRegistryConfig struct {
 	DockerConfigDir string
 	username        string
 	password        string
+}
+
+func RegistryHost(port string) string {
+	host := "localhost"
+	if dockerHost := os.Getenv("DOCKER_HOST"); dockerHost != "" {
+		re := regexp.MustCompile(`^tcp://(\d+\.\d+\.\d+\.\d+):\d+$`)
+		m := re.FindAllStringSubmatch(dockerHost, -1)
+		if len(m) == 0 || len(m[0]) == 0 {
+			panic("cannot parse host from DOCKER_HOST")
+		}
+		host = m[0][1]
+	}
+
+	return fmt.Sprintf("%s:%s", host, port)
 }
 
 func RunRegistry(t *testing.T) *TestRegistryConfig {
@@ -56,6 +71,7 @@ func RunRegistry(t *testing.T) *TestRegistryConfig {
 		if err == nil {
 			break
 		}
+		t.Logf("error getting catalog: %s", err.Error())
 
 		err = ctx.Err()
 		if err != nil {
@@ -72,7 +88,8 @@ func (rc *TestRegistryConfig) AuthConfig() dockertypes.AuthConfig {
 	return dockertypes.AuthConfig{
 		Username:      rc.username,
 		Password:      rc.password,
-		ServerAddress: fmt.Sprintf("localhost:%s", rc.RunRegistryPort)}
+		ServerAddress: RegistryHost(rc.RunRegistryPort),
+	}
 }
 
 func (rc *TestRegistryConfig) Login(t *testing.T, username string, password string) {
@@ -80,7 +97,8 @@ func (rc *TestRegistryConfig) Login(t *testing.T, username string, password stri
 		_, err := dockerCli(t).RegistryLogin(context.Background(), dockertypes.AuthConfig{
 			Username:      username,
 			Password:      password,
-			ServerAddress: fmt.Sprintf("localhost:%s", rc.RunRegistryPort)})
+			ServerAddress: RegistryHost(rc.RunRegistryPort),
+		})
 		return err == nil
 	}, 100*time.Millisecond, 10*time.Second)
 }
@@ -116,11 +134,6 @@ func startRegistry(t *testing.T, runRegistryName, username, password string) str
 	AssertNil(t, err)
 	runRegistryPort := inspect.NetworkSettings.Ports["5000/tcp"][0].HostPort
 
-	if os.Getenv("DOCKER_HOST") != "" {
-		err := proxyDockerHostPort(runRegistryPort)
-		AssertNil(t, err)
-	}
-
 	return runRegistryPort
 }
 
@@ -138,12 +151,12 @@ func setupDockerConfigWithAuth(t *testing.T, username string, password string, r
 
 	AssertNil(t, ioutil.WriteFile(filepath.Join(dockerConfigDir, "config.json"), []byte(fmt.Sprintf(`{
 			  "auths": {
-			    "localhost:%s": {
+			    "%s": {
 			      "auth": "%s"
 			    }
 			  }
 			}
-			`, runRegistryPort, encodedUserPass(username, password))), 0666))
+			`, RegistryHost(runRegistryPort), encodedUserPass(username, password))), 0666))
 	return dockerConfigDir
 }
 
@@ -162,7 +175,7 @@ func (rc *TestRegistryConfig) StopRegistry(t *testing.T) {
 }
 
 func (rc *TestRegistryConfig) RepoName(name string) string {
-	return "localhost:" + rc.RunRegistryPort + "/" + name
+	return RegistryHost(rc.RunRegistryPort) + "/" + name
 }
 
 func (rc *TestRegistryConfig) RegistryAuth() string {
@@ -170,7 +183,7 @@ func (rc *TestRegistryConfig) RegistryAuth() string {
 }
 
 func (rc *TestRegistryConfig) RegistryCatalog() (string, error) {
-	return HTTPGetE(fmt.Sprintf("http://localhost:%s/v2/_catalog", rc.RunRegistryPort), map[string]string{
+	return HTTPGetE(fmt.Sprintf("http://%s/v2/_catalog", RegistryHost(rc.RunRegistryPort)), map[string]string{
 		"Authorization": "Basic " + encodedUserPass(rc.username, rc.password),
 	})
 }

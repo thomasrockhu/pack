@@ -9,7 +9,6 @@ require (
 	github.com/buildpacks/lifecycle v0.7.2
 	github.com/containerd/containerd v1.3.3 // indirect
 	github.com/containerd/continuity v0.0.0-20200107194136-26c1120b8d41 // indirect
-	github.com/dgodd/dockerdial v1.0.1
 	github.com/docker/cli v0.0.0-20200312141509-ef2f64abbd37 // indirect
 	github.com/docker/docker v1.4.2-0.20200221181110-62bd5a33f707
 	github.com/docker/go-connections v0.4.0
