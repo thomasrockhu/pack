@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"testing"
 	"time"
 
@@ -33,12 +33,11 @@ type TestRegistryConfig struct {
 func RegistryHost(port string) string {
 	host := "localhost"
 	if dockerHost := os.Getenv("DOCKER_HOST"); dockerHost != "" {
-		re := regexp.MustCompile(`^tcp://(\d+\.\d+\.\d+\.\d+):\d+$`)
-		m := re.FindAllStringSubmatch(dockerHost, -1)
-		if len(m) == 0 || len(m[0]) == 0 {
-			panic("cannot parse host from DOCKER_HOST")
+		u, err := url.Parse(dockerHost)
+		if err != nil {
+			panic("unable to parse DOCKER_HOST: " + err.Error())
 		}
-		host = m[0][1]
+		host = u.Hostname()
 	}
 
 	return fmt.Sprintf("%s:%s", host, port)
