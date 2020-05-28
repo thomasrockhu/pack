@@ -585,22 +585,6 @@ func testAcceptance(
 			runImageMirror = value
 		})
 
-		when("creating a windows builder", func() {
-			it.Before(func() {
-				h.SkipIf(t, dockerHostOS() != "windows", "The current Docker daemon does not support Windows-based containers")
-			})
-
-			it("succeeds", func() {
-				builderName := createBuilder(t, runImageMirror, configDir, packCreateBuilderPath, lifecyclePath, lifecycleDescriptor)
-				defer h.DockerRmi(dockerCli, builderName)
-
-				inspect, _, err := dockerCli.ImageInspectWithRaw(context.TODO(), builderName)
-				h.AssertNil(t, err)
-
-				h.AssertEq(t, inspect.Os, "windows")
-			})
-		})
-
 		when("builder is created", func() {
 			var (
 				builderName string
@@ -608,10 +592,8 @@ func testAcceptance(
 			)
 
 			it.Before(func() {
-				h.SkipIf(t, dockerHostOS() == "windows", "These tests are not yet compatible with Windows-based containers")
-
 				var err error
-				tmpDir, err = ioutil.TempDir("", "package-buildpack-tests")
+				tmpDir, err = ioutil.TempDir("", "pack-tests")
 				h.AssertNil(t, err)
 
 				key := taskKey("create-builder", runImageMirror, configDir, packCreateBuilderPath, lifecyclePath)
@@ -681,7 +663,7 @@ func testAcceptance(
 						creatorSupported = lifecycleSupportsCreator && packSupportsCreator
 					})
 
-					it("creates a runnable, rebuildable image on daemon from app dir", func() {
+					it.Focus("creates a runnable, rebuildable image on daemon from app dir", func() {
 						appPath := filepath.Join("testdata", "mock_app")
 
 						output := h.Run(t, subjectPack("build", repoName, "-p", appPath))
@@ -1808,6 +1790,11 @@ func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecycleP
 		"read-env-buildpack",
 	}
 
+	// NOTE: Remove when Windows-based packages are supported
+	if dockerHostOS() == "windows" {
+		buildpacks = append(buildpacks, "simple-layers-buildpack")
+	}
+
 	for _, v := range buildpacks {
 		tgz := h.CreateTGZ(t, filepath.Join(buildpacksDir, v), "./", 0755)
 		err := os.Rename(tgz, filepath.Join(tmpDir, v+".tgz"))
@@ -1816,6 +1803,8 @@ func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecycleP
 
 	var packageImageName string
 	var packageId string
+
+	// NOTE: Remove this check when Windows-based packages are supported
 	if dockerHostOS() != "windows" {
 		// CREATE PACKAGE
 		packageImageName = packageBuildpackAsImage(t,
@@ -1840,7 +1829,13 @@ func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecycleP
 	}
 
 	// RENDER builder.toml
-	cfgData := fillTemplate(t, filepath.Join(configDir, "builder.toml"), map[string]interface{}{
+	configFileName := "builder.toml"
+
+	// NOTE: Remove when Windows-based packages are supported (can use same toml at that point)
+	if dockerHostOS() == "windows" {
+		configFileName = "builder-windows.toml"
+	}
+	cfgData := fillTemplate(t, filepath.Join(configDir, configFileName), map[string]interface{}{
 		"package_image_name": packageImageName,
 		"package_id":         packageId,
 		"run_image_mirror":   runImageMirror,
@@ -1848,14 +1843,14 @@ func createBuilder(t *testing.T, runImageMirror, configDir, packPath, lifecycleP
 		"lifecycle_version":  lifecycleVersion,
 	})
 
-	err = ioutil.WriteFile(filepath.Join(tmpDir, "builder.toml"), []byte(cfgData), os.ModePerm)
+	err = ioutil.WriteFile(filepath.Join(tmpDir, configFileName), []byte(cfgData), os.ModePerm)
 	h.AssertNil(t, err)
 
 	// NAME BUILDER
 	bldr := registryConfig.RepoName("test/builder-" + h.RandString(10))
 
 	// CREATE BUILDER
-	cmd := exec.Command(packPath, "create-builder", "--no-color", bldr, "-b", filepath.Join(tmpDir, "builder.toml"))
+	cmd := exec.Command(packPath, "create-builder", "--no-color", bldr, "-b", filepath.Join(tmpDir, configFileName))
 	output := h.Run(t, cmd)
 	h.AssertContains(t, output, fmt.Sprintf("Successfully created builder image '%s'", bldr))
 	h.AssertNil(t, h.PushImage(dockerCli, bldr, registryConfig))
@@ -2052,7 +2047,6 @@ func runDockerImageExposePort(t *testing.T, containerName, repoName string) stri
 
 	ctr, err := dockerCli.ContainerCreate(ctx, &container.Config{
 		Image:        repoName,
-		Env:          []string{"PORT=8080"},
 		ExposedPorts: map[nat.Port]struct{}{"8080/tcp": {}},
 		Healthcheck:  nil,
 	}, &container.HostConfig{

@@ -56,6 +56,22 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 
 			h.AssertSliceContainsMatch(t, phaseConfigProvider.HostConfig().Binds, "pack-layers-.*:/layers")
 			h.AssertSliceContainsMatch(t, phaseConfigProvider.HostConfig().Binds, "pack-app-.*:/workspace")
+
+			h.AssertEq(t, phaseConfigProvider.HostConfig().Isolation, container.IsolationEmpty)
+		})
+
+		when("building for Windows", func() {
+			it("sets process isolation", func() {
+				fakeBuilderImage := ifakes.NewImage("fake-builder", "", nil)
+				fakeBuilderImage.SetPlatform("windows", "", "")
+				fakeBuilder, err := fakes.NewFakeBuilder(fakes.WithImage(fakeBuilderImage))
+				h.AssertNil(t, err)
+				lifecycle := newTestLifecycle(t, false, fakes.WithBuilder(fakeBuilder))
+
+				phaseConfigProvider := build.NewPhaseConfigProvider("some-name", lifecycle)
+
+				h.AssertEq(t, phaseConfigProvider.HostConfig().Isolation, container.IsolationProcess)
+			})
 		})
 
 		when("called with WithArgs", func() {
@@ -118,7 +134,7 @@ func testPhaseConfigProvider(t *testing.T, when spec.G, it spec.S) {
 						build.WithDaemonAccess(),
 					)
 
-					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "")
+					h.AssertEq(t, phaseConfigProvider.ContainerConfig().User, "ContainerAdministrator")
 					h.AssertSliceContains(t, phaseConfigProvider.HostConfig().Binds, `\\.\pipe\docker_engine:\\.\pipe\docker_engine`)
 				})
 			})

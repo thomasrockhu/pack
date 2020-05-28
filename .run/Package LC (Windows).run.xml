@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Package LC (Windows)" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile">
+    <makefile filename="$PROJECT_DIR$/../buildpacks-lifecycle/Makefile" target="docker-build-windows" workingDirectory="$PROJECT_DIR$/../buildpacks-lifecycle" arguments="">
+      <envs>
+        <env name="DOCKER_HOST" value="tcp://192.168.2.128:23750" />
+        <env name="LIFECYCLE_VERSION" value="0.7.5" />
+      </envs>
+    </makefile>
+    <method v="2" />
+  </configuration>
+</component>

@@ -41,7 +41,9 @@ type PhaseFactory interface {
 func (l *Lifecycle) PrepareAppVolume(ctx context.Context) error {
 	tarExtractPath := "/"
 	cmd := []string{""}
+	isolation := dcontainer.IsolationEmpty
 	if l.os == "windows" {
+		isolation = dcontainer.IsolationProcess
 		tarExtractPath = "/windows"
 		cmd = []string{
 			"xcopy",
@@ -58,7 +60,8 @@ func (l *Lifecycle) PrepareAppVolume(ctx context.Context) error {
 			WorkingDir: "/",
 		},
 		&dcontainer.HostConfig{
-			Binds: []string{fmt.Sprintf("%s:%s", l.AppVolume, l.mountPaths.appDir())},
+			Binds:     []string{fmt.Sprintf("%s:%s", l.AppVolume, l.mountPaths.appDir())},
+			Isolation: isolation,
 		},
 		nil, "",
 	)

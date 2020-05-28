@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/windows/nanoserver:1809
+FROM mcr.microsoft.com/windows/nanoserver:1903
 
 # placeholder values until correct values are deteremined
 ENV CNB_USER_ID=0

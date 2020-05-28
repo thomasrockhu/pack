@@ -28,6 +28,10 @@ func NewPhaseConfigProvider(name string, lifecycle *Lifecycle, ops ...PhaseConfi
 	provider.ctrConf.Image = lifecycle.builder.Name()
 	provider.ctrConf.Labels = map[string]string{"author": "pack"}
 
+	if lifecycle.os == "windows" {
+		provider.hostConf.Isolation = container.IsolationProcess
+	}
+
 	ops = append(ops,
 		WithLifecycleProxy(lifecycle),
 		WithBinds([]string{
@@ -72,9 +76,9 @@ func WithDaemonAccess() PhaseConfigProviderOperation {
 		bind := `\\.\pipe\docker_engine:\\.\pipe\docker_engine`
 		if provider.os != "windows" {
 			bind = "/var/run/docker.sock:/var/run/docker.sock"
-			WithRoot()(provider)
 		}
 		provider.hostConf.Binds = append(provider.hostConf.Binds, bind)
+		WithRoot()(provider)
 	}
 }
 

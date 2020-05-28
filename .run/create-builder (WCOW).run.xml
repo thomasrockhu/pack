@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="create-builder (WCOW)" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="pack" />
+    <working_directory value="$PROJECT_DIR$/" />
+    <go_parameters value="-i" />
+    <parameters value="create-builder debug/builder -v -b $USER_HOME$/Desktop/win_sandbox/builder.toml" />
+    <envs>
+      <env name="DOCKER_HOST" value="tcp://192.168.2.128:23750" />
+    </envs>
+    <kind value="FILE" />
+    <filePath value="$PROJECT_DIR$/cmd/pack/main.go" />
+    <package value="github.com/buildpacks/pack" />
+    <directory value="$PROJECT_DIR$/" />
+    <method v="2" />
+  </configuration>
+</component>
