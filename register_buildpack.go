@@ -3,7 +3,6 @@ package pack
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
 	"runtime"
 	"strings"
@@ -45,10 +44,10 @@ func (c *Client) RegisterBuildpack(ctx context.Context, opts RegisterBuildpackOp
 		Name:      name,
 		Version:   buildpackInfo.Version,
 		Address:   id.String(),
-		Yanked:    false,
+		Yank:      false,
 	}
 
-	issueURL, err := parseURL(opts.URL)
+	issueURL, err := registry.GetIssueURL(opts.URL)
 	if err != nil {
 		return err
 	}
@@ -81,11 +80,4 @@ func parseID(id string) (string, string, error) {
 	}
 
 	return parts[0], parts[1], nil
-}
-
-func parseURL(githubURL string) (*url.URL, error) {
-	if githubURL == "" {
-		return nil, errors.New("missing github URL")
-	}
-	return url.Parse(fmt.Sprintf("%s/issues/new", strings.TrimSuffix(githubURL, "/")))
 }
