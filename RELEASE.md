@@ -38,3 +38,4 @@ version to release, in the format `v<version>`.
 [maintainers]: https://github.com/buildpacks/community/blob/main/TEAMS.md#platform-team
 [release-process]: https://github.com/buildpacks/rfcs/blob/main/text/0039-release-process.md#change-control-board
 [release]: https://github.com/buildpacks/pack/releases
+
