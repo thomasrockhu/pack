@@ -20,18 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [macos, linux, windows-lcow, windows-wcow]
+        config: [windows-lcow, windows-wcow]
         include:
-          - config: macos
-            os: macos
-            runner: macos-latest
-            no_docker: "true"
-            pack_bin: pack
-          - config: linux
-            os: linux
-            runner: ubuntu-latest
-            no_docker: "false"
-            pack_bin: pack
           - config: windows-lcow
             os: windows
             runner: [self-hosted, windows]
@@ -69,10 +59,6 @@ jobs:
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
       - name: Verify
         run: make verify
-      - name: Test
-        env:
-          TEST_COVERAGE: 1
-        run: make test
       - name: Upload Coverage
         uses: codecov/codecov-action@v1
         with:
