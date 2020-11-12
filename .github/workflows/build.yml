@@ -4,16 +4,7 @@ on: pull_request
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [windows-wcow]
-        include:
-          - config: windows-wcow
-            os: windows
-            runner: [windows, wcow]
-            no_docker: "false"
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows
     steps:
       - uses: actions/checkout@v2
       - name: Upload Coverage
