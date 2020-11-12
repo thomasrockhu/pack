@@ -1,6 +1,5 @@
 .pack/
 /pack
-out/
 
 # Jetbrains Goland
 .idea/

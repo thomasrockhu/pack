@@ -1,19 +1,6 @@
 name: build
 
-on:
-  push:
-    branches:
-      - main
-      - 'release/**'
-  pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'resources/**'
-      - 'CODEOWNERS'
-      - 'LICENSE'
-    branches:
-      - main
-      - 'release/**'
+on: pull_request
 
 jobs:
   test:
@@ -24,20 +11,10 @@ jobs:
         include:
           - config: windows-wcow
             os: windows
-            runner: [self-hosted, windows, wcow]
+            runner: [windows, wcow]
             no_docker: "false"
-            pack_bin: pack.exe
     runs-on: ${{ matrix.runner }}
-    env:
-      PACK_BIN: ${{ matrix.pack_bin }}
-      NO_DOCKER: ${{ matrix.no_docker }}
     steps:
-      - name: Set git to use LF and symlinks
-        if: matrix.os == 'windows'
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-          git config --global core.symlinks true
       - uses: actions/checkout@v2
       - name: Derive pack version from branch name
         run: |
