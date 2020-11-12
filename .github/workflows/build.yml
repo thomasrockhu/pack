@@ -20,23 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [macos, linux, windows-lcow, windows-wcow]
+        config: [windows-wcow]
         include:
-          - config: macos
-            os: macos
-            runner: macos-latest
-            no_docker: "true"
-            pack_bin: pack
-          - config: linux
-            os: linux
-            runner: ubuntu-latest
-            no_docker: "false"
-            pack_bin: pack
-          - config: windows-lcow
-            os: windows
-            runner: [self-hosted, windows]
-            no_docker: "false"
-            pack_bin: pack.exe
           - config: windows-wcow
             os: windows
             runner: [self-hosted, windows, wcow]
@@ -59,20 +44,6 @@ jobs:
           [[ $GITHUB_REF =~ ^refs\/heads\/release/(.*)$ ]] && version=${BASH_REMATCH[1]} || version=0.0.0
           echo "PACK_VERSION=${version}" >> $GITHUB_ENV
         shell: bash
-      - name: Set up go
-        uses: actions/setup-go@v2.1.3
-        with:
-          go-version: '1.14'
-      - name: Set up go env
-        run: |
-          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-      - name: Verify
-        run: make verify
-      - name: Test
-        env:
-          TEST_COVERAGE: 1
-        run: make test
       - name: Upload Coverage
         uses: codecov/codecov-action@v1
         with:
