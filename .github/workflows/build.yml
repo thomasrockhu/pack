@@ -1,4 +1,4 @@
-name: build
+name: builder
 
 on: pull_request
 
@@ -16,11 +16,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v2
-      - name: Derive pack version from branch name
-        run: |
-          [[ $GITHUB_REF =~ ^refs\/heads\/release/(.*)$ ]] && version=${BASH_REMATCH[1]} || version=0.0.0
-          echo "PACK_VERSION=${version}" >> $GITHUB_ENV
-        shell: bash
       - name: Upload Coverage
         uses: codecov/codecov-action@v1
         with:
